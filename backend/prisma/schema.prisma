@@ -1,0 +1,546 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  CREDENTIALS
+  GOOGLE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  VERY_ACTIVE
+}
+
+enum GoalType {
+  LOSE
+  MAINTAIN
+  GAIN
+  TRANSFORM
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum DeviceType {
+  ANDROID
+  IOS
+  WEB
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum RecipeDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum RecipeGoalMode {
+  WEIGHT_LOSS
+  LEAN
+  BULK
+}
+
+enum CoachMode {
+  FAT_LOSS
+  MUSCLE_GAIN
+  MAINTAIN
+  INDIAN_HOME_STYLE
+}
+
+model User {
+  id                      String               @id @default(cuid())
+  name                    String
+  email                   String               @unique
+  password                String
+  auth_provider           AuthProvider         @default(CREDENTIALS)
+  email_verified          Boolean              @default(false)
+  account_status          AccountStatus        @default(INACTIVE)
+  created_at              DateTime             @default(now())
+  updated_at              DateTime             @updatedAt
+  last_login_at           DateTime?
+  profile                 Profile?
+  food_logs               FoodLog[]
+  user_pref               UserPreference?
+  refresh_token_hash      String?
+  refresh_token_expiresAt DateTime?
+  password_reset_token    String?
+  password_reset_expires  DateTime?
+  is_onboarded            Boolean              @default(false)
+  onboarding_step         Int                  @default(0)
+  user_goals              UserGoal[]
+  daily_summary           DailySummary[]
+  activity_syncs          ActivitySync[]
+  streak_logs             UserStreak[]
+  saved_recipes           UserSavedRecipe[]
+  custom_recipes          UserCustomRecipe[]
+  recipe_modifications    RecipeModification[]
+  fridge_ingredients      FridgeIngredient[]
+  voice_logs_raw          VoiceLogRaw[]
+  ai_usage_logs           AiUsageLog[]
+  coach_messages          CoachMessage[]
+  coach_checkins          CoachCheckIn[]
+  coach_preference        CoachPreference?
+  notifications           Notification[]
+  feedback                Feedback[]
+  recipes                 Recipe[]
+
+  @@map("users")
+}
+
+model Profile {
+  id                   String         @id @default(cuid())
+  user_id              String         @unique
+  full_name            String
+  age                  Int?
+  gender               Gender?
+  height_cm            Float?
+  weight_kg            Float?
+  activity_level       ActivityLevel?
+  goal_type            GoalType?
+  bmr_calories         Float?
+  daily_calorie_target Float?
+  daily_protein_target Float?
+  daily_carbs_target   Float?
+  daily_fat_target     Float?
+  target_formula       String?        @default("AUTO")
+  step_goal            Int?
+  created_at           DateTime       @default(now())
+  updated_at           DateTime       @updatedAt
+  user                 User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model FoodLog {
+  id             String     @id @default(cuid())
+  user_id        String
+  meal_type      MealType
+  logged_at      DateTime   @default(now())
+  total_calories Float      @default(0)
+  total_protein  Float      @default(0)
+  total_carbs    Float      @default(0)
+  total_fat      Float      @default(0)
+  source         String?
+  created_at     DateTime   @default(now())
+  user           User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  meal_items     MealItem[]
+
+  @@index([user_id, logged_at])
+  @@map("food_logs")
+}
+
+model MealItem {
+  id              String   @id @default(cuid())
+  food_log_id     String
+  food_name       String
+  quantity        Float
+  unit            String
+  calories        Float
+  protein         Float
+  carbs           Float
+  fat             Float
+  is_custom       Boolean  @default(false)
+  created_at      DateTime @default(now())
+  additional_info Json?
+  food_log        FoodLog  @relation(fields: [food_log_id], references: [id], onDelete: Cascade)
+
+  @@index([food_log_id])
+  @@map("meal_items")
+}
+
+model FoodDatabase {
+  id                 String             @id @default(cuid())
+  food_name          String
+  category           String?
+  calories_per_unit  Float
+  protein_per_unit   Float
+  carbs_per_unit     Float
+  fat_per_unit       Float
+  additional_info    Json?
+  default_unit       String
+  is_verified        Boolean            @default(false)
+  created_at         DateTime           @default(now())
+  recipe_ingredients RecipeIngredient[]
+  fridge_items       FridgeIngredient[]
+
+  @@index([food_name])
+  @@map("food_database")
+}
+
+model Recipe {
+  id               String               @id @default(cuid())
+  user_id          String?
+  name             String
+  description      String?
+  image_url        String?
+  meal_type        MealType
+  difficulty       RecipeDifficulty     @default(MEDIUM)
+  cook_time_mins   Int                  @default(25)
+  is_veg           Boolean              @default(true)
+  tags             String[]
+  popularity_score Int                  @default(0)
+  is_ai_generated  Boolean              @default(false)
+  created_at       DateTime             @default(now())
+  updated_at       DateTime             @updatedAt
+  user             User?                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ingredients      RecipeIngredient[]
+  instructions     RecipeInstruction[]
+  nutrition        RecipeNutrition?
+  modifications    RecipeModification[]
+  saved_by         UserSavedRecipe[]
+  custom_versions  UserCustomRecipe[]
+
+  @@index([meal_type])
+  @@index([is_veg])
+  @@index([popularity_score])
+  @@index([user_id])
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id              String        @id @default(cuid())
+  recipe_id       String
+  food_id         String?
+  ingredient_name String
+  quantity        Float
+  unit            String
+  calories        Float         @default(0)
+  protein         Float         @default(0)
+  carbs           Float         @default(0)
+  fat             Float         @default(0)
+  order_index     Int           @default(0)
+  recipe          Recipe        @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  food            FoodDatabase? @relation(fields: [food_id], references: [id], onDelete: SetNull)
+
+  @@index([recipe_id])
+  @@index([food_id])
+  @@map("recipe_ingredients")
+}
+
+model RecipeInstruction {
+  id          String @id @default(cuid())
+  recipe_id   String
+  step_number Int
+  instruction String
+  recipe      Recipe @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+
+  @@index([recipe_id])
+  @@map("recipe_instructions")
+}
+
+model RecipeNutrition {
+  id        String @id @default(cuid())
+  recipe_id String @unique
+  servings  Float  @default(1)
+  calories  Float  @default(0)
+  protein   Float  @default(0)
+  carbs     Float  @default(0)
+  fat       Float  @default(0)
+  recipe    Recipe @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+
+  @@map("recipe_nutrition")
+}
+
+model RecipeModification {
+  id                 String         @id @default(cuid())
+  recipe_id          String
+  user_id            String
+  goal_mode          RecipeGoalMode
+  portion_multiplier Float
+  original_nutrition Json
+  modified_nutrition Json
+  change_summary     Json
+  created_at         DateTime       @default(now())
+  recipe             Recipe         @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  user               User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([recipe_id, user_id])
+  @@index([created_at])
+  @@map("recipe_modifications")
+}
+
+model UserSavedRecipe {
+  id           String   @id @default(cuid())
+  user_id      String
+  recipe_id    String
+  is_favorite  Boolean  @default(true)
+  times_logged Int      @default(0)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  recipe       Recipe   @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, recipe_id])
+  @@index([user_id])
+  @@map("user_saved_recipes")
+}
+
+model UserCustomRecipe {
+  id                 String           @id @default(cuid())
+  user_id            String
+  base_recipe_id     String?
+  name               String
+  description        String?
+  image_url          String?
+  meal_type          MealType
+  difficulty         RecipeDifficulty @default(MEDIUM)
+  cook_time_mins     Int              @default(20)
+  ingredients_json   Json
+  instructions_json  Json
+  nutrition_json     Json
+  goal_mode          RecipeGoalMode
+  portion_multiplier Float            @default(1)
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+  user               User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  base_recipe        Recipe?          @relation(fields: [base_recipe_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, created_at])
+  @@index([base_recipe_id])
+  @@map("user_custom_recipes")
+}
+
+model FridgeIngredient {
+  id              String        @id @default(cuid())
+  user_id         String
+  food_id         String?
+  ingredient_name String
+  quantity        Float
+  unit            String
+  expires_at      DateTime?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  user            User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  food            FoodDatabase? @relation(fields: [food_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, updated_at])
+  @@index([food_id])
+  @@map("fridge_ingredients")
+}
+
+model UserPreference {
+  id                   String   @id @default(cuid())
+  user_id              String   @unique
+  katori_size_ml       Int?
+  roti_thickness       String?
+  dietary_preference   String?  @default("VEG")
+  default_meal_types   String[]
+  notification_enabled Boolean  @default(true)
+  notification_time    String?
+  google_fit_synced    Boolean  @default(false)
+  mic_permission       Boolean  @default(false)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  user                 User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model UserGoal {
+  id                 String    @id @default(cuid())
+  user_id            String
+  start_date         DateTime
+  end_date           DateTime?
+  target_weight_kg   Float?
+  daily_calorie_goal Float?
+  daily_protein_goal Float?
+  daily_carbs_goal   Float?
+  daily_fat_goal     Float?
+  is_active          Boolean   @default(true)
+  created_at         DateTime  @default(now())
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, is_active])
+  @@map("user_goals")
+}
+
+model DailySummary {
+  id                  String   @id @default(cuid())
+  user_id             String
+  summary_date        DateTime
+  total_calories      Float    @default(0)
+  total_protein       Float    @default(0)
+  total_carbs         Float    @default(0)
+  total_fat           Float    @default(0)
+  steps_count         Int      @default(0)
+  calories_from_steps Float    @default(0)
+  remaining_calories  Float    @default(0)
+  remaining_protein   Float    @default(0)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  user                User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, summary_date])
+  @@index([user_id])
+  @@map("daily_summaries")
+}
+
+model UserStreak {
+  id          String   @id @default(cuid())
+  user_id     String
+  streak_date DateTime
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, streak_date])
+  @@index([user_id, streak_date])
+  @@map("user_streaks")
+}
+
+model ActivitySync {
+  id              String   @id @default(cuid())
+  user_id         String
+  sync_date       DateTime
+  steps           Int      @default(0)
+  distance_m      Float    @default(0)
+  calories_burned Float    @default(0)
+  source          String
+  synced_at       DateTime @default(now())
+  created_at      DateTime @default(now())
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, sync_date])
+  @@map("activity_syncs")
+}
+
+model VoiceLogRaw {
+  id                String       @id @default(cuid())
+  user_id           String
+  raw_transcript    String
+  parsed_json       Json?
+  success           Boolean      @default(false)
+  confidence_score  Float?
+  corrected_by_user Boolean      @default(false)
+  created_at        DateTime     @default(now())
+  user              User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ai_usage_logs     AiUsageLog[]
+
+  @@index([user_id, created_at])
+  @@map("voice_logs_raw")
+}
+
+model AiUsageLog {
+  id               String       @id @default(cuid())
+  user_id          String
+  voice_log_raw_id String?
+  ai_feature       String
+  input_text       String
+  input_tokens     Int?
+  output_tokens    Int?
+  response_time_ms Int?
+  cost_inr         Decimal?     @db.Decimal(10, 4)
+  status           String
+  error_message    String?
+  created_at       DateTime     @default(now())
+  user             User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  voice_log_raw    VoiceLogRaw? @relation(fields: [voice_log_raw_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, created_at])
+  @@index([voice_log_raw_id])
+  @@map("ai_usage_logs")
+}
+
+model CoachMessage {
+  id           String   @id @default(cuid())
+  user_id      String
+  role         String
+  content      String
+  actions_json Json?
+  created_at   DateTime @default(now())
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@map("coach_messages")
+}
+
+model CoachCheckIn {
+  id            String   @id @default(cuid())
+  user_id       String
+  checkin_date  DateTime
+  hunger_level  Int
+  energy_level  Int
+  cravings_note String?
+  notes         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, checkin_date])
+  @@index([user_id, checkin_date])
+  @@map("coach_checkins")
+}
+
+model CoachPreference {
+  id         String    @id @default(cuid())
+  user_id    String    @unique
+  mode       CoachMode @default(MAINTAIN)
+  updated_at DateTime  @updatedAt
+  created_at DateTime  @default(now())
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("coach_preferences")
+}
+
+model Notification {
+  id                String             @id @default(cuid())
+  user_id           String
+  notification_type String
+  title             String
+  body              String
+  scheduled_for     DateTime?
+  sent_at           DateTime?
+  status            NotificationStatus @default(PENDING)
+  created_at        DateTime           @default(now())
+  user              User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, status])
+  @@index([scheduled_for])
+  @@map("notifications")
+}
+
+model Feedback {
+  id            String   @id @default(cuid())
+  user_id       String
+  feedback_type String
+  rating        Int?
+  comment       String?
+  screen_name   String?
+  created_at    DateTime @default(now())
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@map("feedback")
+}
